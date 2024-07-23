@@ -27,8 +27,8 @@ entity sevenSeg is
   port (
     clk : in std_logic;  -- Clock input
     reset : in std_logic;  -- Reset input
---    SW : in STD_LOGIC_VECTOR (3 downto 0); -- used to test w/switches, replace 'value' in process (clk, reset)
-    value : in integer range 0 to 99;  -- Value to be displayed (0-99)
+    value : in STD_LOGIC_VECTOR (3 downto 0); -- used to test w/switches, replace 'value' in process (clk, reset)
+--    value : in integer range 0 to 99;  -- Value to be displayed (0-99)
     ssd_display : out std_logic_vector(6 downto 0);  -- 7 segment display output
     c : out std_logic  -- digit select signal
   );
@@ -53,8 +53,10 @@ begin
             count <= count + 1;
 
             -- Convert to BCD
-            tens_digit <= TO_INTEGER(unsigned(value)) / 10;
-            ones_digit <= TO_INTEGER(unsigned(value)) mod 10;
+      tens_digit <= TO_INTEGER(unsigned(value)) / 10; -- use when value == switches
+      ones_digit <= TO_INTEGER(unsigned(value)) mod 10; -- use when value == switches
+      --tens_digit <= value / 10; -- use when value == integer
+      --ones_digit <= value mod 10; -- use when value == integer
 
             -- Alternate digit selection
             c_temp <= count(count'high);
