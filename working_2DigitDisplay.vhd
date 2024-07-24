@@ -41,7 +41,7 @@ architecture behavioral of sevenSeg is
     signal count : unsigned(15 downto 0) := (others => '0');  -- Alternating between digits
     signal c_temp : std_logic;  -- Temp variable since "out" ports cannot be read in
     
-    -- Debouncing signals and parameters
+    -- Debouncing signals
     constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
     signal add_debounce_counter, subtract_debounce_counter : integer := 0;
     signal add_stable, subtract_stable : std_logic := '0';
