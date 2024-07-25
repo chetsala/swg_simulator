@@ -34,6 +34,10 @@ architecture Behavioral of ChlorineGenerator is
     signal add_stable, subtract_stable : std_logic := '0';
     signal debounce_flag : std_logic := '0';
 
+    -- Display sequence counter for INIT_POOL_SIZE state
+    signal display_counter : integer range 0 to 4 := 0;
+    signal display_timer : unsigned(20 downto 0) := (others => '0');  -- Timer for display transitions
+
 begin
     -- Debouncing process for "add" button (BTN1)
     process(CLK, RST)
@@ -107,36 +111,48 @@ begin
     end process;
 
     -- 7-segment display logic
-    process(c_temp, tens_digit, ones_digit)
+    process(c_temp, tens_digit, ones_digit, state, display_counter)
     begin
-        case c_temp is
-            when '0' =>
-                case ones_digit is
-                    when 0 => SSD <= "0111111";
-                    when 1 => SSD <= "0000110";
-                    when 2 => SSD <= "1011011";
-                    when 3 => SSD <= "1001111";
-                    when 4 => SSD <= "1100110";
-                    when 5 => SSD <= "1101101";
-                    when 6 => SSD <= "1111101";
-                    when 7 => SSD <= "0000111";
-                    when 8 => SSD <= "1111111";
-                    when 9 => SSD <= "1101111";
+        case state is
+            when INIT_POOL_SIZE =>
+                case display_counter is
+                    when 0 => SSD <= "0111111";  -- P
+                    when 1 => SSD <= "1001111";  -- o
+                    when 2 => SSD <= "0000110";  -- l
+                    when 3 => SSD <= "1000000";  -- space (off)
+                    when 4 => SSD <= "1110111";  -- S
                     when others => SSD <= "0000000";  -- Default case
                 end case;
             when others =>
-                case tens_digit is
-                    when 0 => SSD <= "0111111";
-                    when 1 => SSD <= "0000110";
-                    when 2 => SSD <= "1011011";
-                    when 3 => SSD <= "1001111";
-                    when 4 => SSD <= "1100110";
-                    when 5 => SSD <= "1101101";
-                    when 6 => SSD <= "1111101";
-                    when 7 => SSD <= "0000111";
-                    when 8 => SSD <= "1111111";
-                    when 9 => SSD <= "1101111";
-                    when others => SSD <= "0000000";  -- Default case
+                case c_temp is
+                    when '0' =>
+                        case ones_digit is
+                            when 0 => SSD <= "0111111";
+                            when 1 => SSD <= "0000110";
+                            when 2 => SSD <= "1011011";
+                            when 3 => SSD <= "1001111";
+                            when 4 => SSD <= "1100110";
+                            when 5 => SSD <= "1101101";
+                            when 6 => SSD <= "1111101";
+                            when 7 => SSD <= "0000111";
+                            when 8 => SSD <= "1111111";
+                            when 9 => SSD <= "1101111";
+                            when others => SSD <= "0000000";  -- Default case
+                        end case;
+                    when others =>
+                        case tens_digit is
+                            when 0 => SSD <= "0111111";
+                            when 1 => SSD <= "0000110";
+                            when 2 => SSD <= "1011011";
+                            when 3 => SSD <= "1001111";
+                            when 4 => SSD <= "1100110";
+                            when 5 => SSD <= "1101101";
+                            when 6 => SSD <= "1111101";
+                            when 7 => SSD <= "0000111";
+                            when 8 => SSD <= "1111111";
+                            when 9 => SSD <= "1101111";
+                            when others => SSD <= "0000000";  -- Default case
+                        end case;
                 end case;
         end case;
     end process;
@@ -144,12 +160,39 @@ begin
     -- Assign the common cathode/anode control signal
     C <= c_temp;
 
+    -- State transition and display sequence management
+    process(CLK, RST)
+    begin
+        if RST = '1' then
+            state <= INIT_POOL_SIZE;
+            display_counter <= 0;
+            display_timer <= (others => '0');
+        elsif rising_edge(CLK) then
+            state <= next_state;
+            if state = INIT_POOL_SIZE then
+                if display_timer < 1000000 then  -- Adjust timing as needed
+                    display_timer <= display_timer + 1;
+                else
+                    display_timer <= (others => '0');
+                    if display_counter < 4 then
+                        display_counter <= display_counter + 1;
+                    else
+                        display_counter <= 0;
+                        next_state <= SET_TEMPERATURE;
+                    end if;
+                end if;
+            else
+                display_counter <= 0;
+                display_timer <= (others => '0');
+            end if;
+        end if;
+    end process;
+
     process(state, BTN, SW)
     begin
         next_state <= state;
         case state is
             when INIT_POOL_SIZE =>
-                -- Display "Po", "ol", " S" etc. on SSD here
                 if BTN(4) = '1' then  -- Set pool size button
                     pool_size <= conv_integer(SW);
                     next_state <= SET_TEMPERATURE;
