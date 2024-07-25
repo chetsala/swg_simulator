@@ -3,16 +3,16 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity sevenSeg is
-  port (
-    clk : in std_logic;  -- Clock input
-    reset : in std_logic;  -- Reset input
-    rot_A : in std_logic; -- Rotary Encoder A input
-    rot_B : in std_logic; -- Rotary Encoder B input
-    -- add : in std_logic;  -- Add input
-    -- subtract : in std_logic;  -- Subtract input
-    ssd_display : out std_logic_vector(6 downto 0);  -- 7 segment display output
-    c : out std_logic  -- digit select signal
-  );
+    port (
+        clk : in std_logic;  -- Clock input
+        reset : in std_logic;  -- Reset input
+        rot_A : in std_logic; -- Rotary Encoder A input
+        rot_B : in std_logic; -- Rotary Encoder B input
+        -- add : in std_logic;  -- Add input
+        -- subtract : in std_logic;  -- Subtract input
+        ssd_display : out std_logic_vector(6 downto 0);  -- 7 segment display output
+        c : out std_logic  -- digit select signal
+    );
 end sevenSeg;
 
 architecture behavioral of sevenSeg is
@@ -31,14 +31,14 @@ architecture behavioral of sevenSeg is
     signal debounce_flag : std_logic := '0';
 
 begin
-        -- Debouncing process for "rot_A"
+    -- Debouncing process for "rot_A"
     process(clk, reset)
     begin
         if reset = '1' then
             rot_A_debounce_counter <= 0;
             rot_A_stable <= '0';
         elsif rising_edge(clk) then
-            if add = '1' then
+            if rot_A = '1' then
                 if rot_A_debounce_counter < DEBOUNCE_MAX then
                     rot_A_debounce_counter <= rot_A_debounce_counter + 1;
                 else
@@ -51,14 +51,14 @@ begin
         end if;
     end process;
 
-        -- Debouncing process for "rot_B"
+    -- Debouncing process for "rot_B"
     process(clk, reset)
     begin
         if reset = '1' then
             rot_B_debounce_counter <= 0;
             rot_B_stable <= '0';
         elsif rising_edge(clk) then
-            if subtract = '1' then
+            if rot_B = '1' then
                 if rot_B_debounce_counter < DEBOUNCE_MAX then
                     rot_B_debounce_counter <= rot_B_debounce_counter + 1;
                 else
@@ -81,18 +81,18 @@ begin
             ones_digit <= 0;
             value <= 0;
             last_encoder_A <= '0';
-            elsif rising_edge(clk) then
-                -- Add/Subtract logic
-                if rot_A_stable = '1' and debounce_flag = '0' and value < 99 then
-                    value <= value + 1;
-                    debounce_flag <= '1';
-                elsif rot_B_stable = '1' and debounce_flag = '0' and value > 0 then
-                    value <= value - 1;
-                    debounce_flag <= '1';
-                elsif rot_A_stable = '0' and rot_B_stable = '0' then
-                    debounce_flag <= '0';
-                end if;
-
+            debounce_flag <= '0';
+        elsif rising_edge(clk) then
+            -- Add/Subtract logic
+            if rot_A_stable = '1' and debounce_flag = '0' and value < 99 then
+                value <= value + 1;
+                debounce_flag <= '1';
+            elsif rot_B_stable = '1' and debounce_flag = '0' and value > 0 then
+                value <= value - 1;
+                debounce_flag <= '1';
+            elsif rot_A_stable = '0' and rot_B_stable = '0' then
+                debounce_flag <= '0';
+            end if;
 
             -- Convert to BCD
             tens_digit <= value / 10;
