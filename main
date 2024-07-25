@@ -9,9 +9,10 @@ entity ChlorineGenerator is
         RST      : in  STD_LOGIC;
         SW       : in  STD_LOGIC_VECTOR (3 downto 0);
         BTN      : in  STD_LOGIC_VECTOR (4 downto 0);
-        LD5      : out STD_LOGIC_VECTOR (2 downto 0);
-        LD6      : out STD_LOGIC_VECTOR (2 downto 0);
-        SSD      : out STD_LOGIC_VECTOR (6 downto 0)
+        LD5      : out STD_LOGIC_VECTOR (2 downto 0);  -- RGB LED for pump status
+        LD6      : out STD_LOGIC_VECTOR (2 downto 0);  -- RGB LED for system status
+        SSD      : out STD_LOGIC_VECTOR (6 downto 0);  -- 7-segment display output
+        C        : out STD_LOGIC                    -- Digit select signal
     );
 end ChlorineGenerator;
 
@@ -22,18 +23,126 @@ architecture Behavioral of ChlorineGenerator is
     signal pool_size, temperature, salinity : integer range 0 to 15 := 0;
     signal pump_status, system_status : STD_LOGIC := '0';
 
-    -- SSD display logic and RGB LED control here
-    -- ...
+    signal tens_digit, ones_digit : integer range 0 to 9;
+    signal value : integer range 0 to 99 := 0;
+    signal count : unsigned(15 downto 0) := (others => '0');  -- Alternating between digits
+    signal c_temp : std_logic;  -- Temp variable since "out" ports cannot be read in
+
+    -- Debouncing signals
+    constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
+    signal add_debounce_counter, subtract_debounce_counter : integer := 0;
+    signal add_stable, subtract_stable : std_logic := '0';
+    signal debounce_flag : std_logic := '0';
 
 begin
+    -- Debouncing process for "add" button (BTN1)
     process(CLK, RST)
     begin
         if RST = '1' then
-            state <= INIT_POOL_SIZE;
+            add_debounce_counter <= 0;
+            add_stable <= '0';
         elsif rising_edge(CLK) then
-            state <= next_state;
+            if BTN(1) = '1' then
+                if add_debounce_counter < DEBOUNCE_MAX then
+                    add_debounce_counter <= add_debounce_counter + 1;
+                else
+                    add_stable <= '1';
+                end if;
+            else
+                add_debounce_counter <= 0;
+                add_stable <= '0';
+            end if;
         end if;
     end process;
+
+    -- Debouncing process for "subtract" button (BTN0)
+    process(CLK, RST)
+    begin
+        if RST = '1' then
+            subtract_debounce_counter <= 0;
+            subtract_stable <= '0';
+        elsif rising_edge(CLK) then
+            if BTN(0) = '1' then
+                if subtract_debounce_counter < DEBOUNCE_MAX then
+                    subtract_debounce_counter <= subtract_debounce_counter + 1;
+                else
+                    subtract_stable <= '1';
+                end if;
+            else
+                subtract_debounce_counter <= 0;
+                subtract_stable <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Main process to handle add/subtract logic and update 7-segment display
+    process(CLK, RST)
+    begin
+        if RST = '1' then
+            value <= 0;
+            count <= (others => '0');
+            c_temp <= '0';
+            tens_digit <= 0;
+            ones_digit <= 0;
+        elsif rising_edge(CLK) then
+            -- Add/Subtract logic
+            if add_stable = '1' and debounce_flag = '0' and value < 99 then
+                value <= value + 1;
+                debounce_flag <= '1';
+            elsif subtract_stable = '1' and debounce_flag = '0' and value > 0 then
+                value <= value - 1;
+                debounce_flag <= '1';
+            elsif add_stable = '0' and subtract_stable = '0' then
+                debounce_flag <= '0';
+            end if;
+
+            -- Convert to BCD
+            tens_digit <= value / 10;
+            ones_digit <= value mod 10;
+
+            -- Alternate digit selection
+            count <= count + 1;
+            c_temp <= count(count'high);
+        end if;
+    end process;
+
+    -- 7-segment display logic
+    process(c_temp, tens_digit, ones_digit)
+    begin
+        case c_temp is
+            when '0' =>
+                case ones_digit is
+                    when 0 => SSD <= "0111111";
+                    when 1 => SSD <= "0000110";
+                    when 2 => SSD <= "1011011";
+                    when 3 => SSD <= "1001111";
+                    when 4 => SSD <= "1100110";
+                    when 5 => SSD <= "1101101";
+                    when 6 => SSD <= "1111101";
+                    when 7 => SSD <= "0000111";
+                    when 8 => SSD <= "1111111";
+                    when 9 => SSD <= "1101111";
+                    when others => SSD <= "0000000";  -- Default case
+                end case;
+            when others =>
+                case tens_digit is
+                    when 0 => SSD <= "0111111";
+                    when 1 => SSD <= "0000110";
+                    when 2 => SSD <= "1011011";
+                    when 3 => SSD <= "1001111";
+                    when 4 => SSD <= "1100110";
+                    when 5 => SSD <= "1101101";
+                    when 6 => SSD <= "1111101";
+                    when 7 => SSD <= "0000111";
+                    when 8 => SSD <= "1111111";
+                    when 9 => SSD <= "1101111";
+                    when others => SSD <= "0000000";  -- Default case
+                end case;
+        end case;
+    end process;
+
+    -- Assign the common cathode/anode control signal
+    C <= c_temp;
 
     process(state, BTN, SW)
     begin
@@ -75,11 +184,13 @@ begin
                 end if;
 
             when PUMP_ON =>
+                LD5 <= "001";  -- Green for pump on
                 if BTN(2) = '1' then  -- Pump off button
                     next_state <= PUMP_OFF;
                 end if;
 
             when PUMP_OFF =>
+                LD5 <= "100";  -- Red for pump off
                 if BTN(2) = '1' then  -- Pump on button
                     next_state <= PUMP_ON;
                 end if;
@@ -100,8 +211,10 @@ begin
             when CHECK_STATUS =>
                 if (temperature > 6) and (salinity >= 5 and salinity <= 12) then
                     system_status <= '1';
+                    LD6 <= "010";  -- Green for good system
                 else
                     system_status <= '0';
+                    LD6 <= "100";  -- Red for bad system
                 end if;
                 next_state <= IDLE;
 
@@ -109,8 +222,5 @@ begin
                 next_state <= INIT_POOL_SIZE;
         end case;
     end process;
-
-    -- Display logic for SSD and RGB LEDs based on the current state
-    -- ...
 
 end Behavioral;
