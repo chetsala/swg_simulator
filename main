@@ -1,147 +1,116 @@
--- Entity Declaration
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
-entity saltwater_chlorine_generator is
+entity ChlorineGenerator is
     Port (
-        clk : in STD_LOGIC; -- Clock signal
-        rst : in STD_LOGIC; -- Reset signal
-        rotary_a : in STD_LOGIC; -- Rotary encoder signal A
-        rotary_b : in STD_LOGIC; -- Rotary encoder signal B
-        btn_add_salt : in STD_LOGIC; -- Button to add salt (Y16)
-        sw_user_mode : in STD_LOGIC; -- Switch for user input mode (D18)
-        btn_increase_temp : in STD_LOGIC; -- Button to increase temperature (M15)
-        btn_increase_salt : in STD_LOGIC; -- Button to increase salt PPM (M14)
-        btn_pump_control : in STD_LOGIC; -- Button to control pool pump (K19)
-        -- Outputs to LEDs and displays
-        led_flow_status : out STD_LOGIC_VECTOR (2 downto 0); -- RGB LED for water flow (LD5)
-        led_system_status : out STD_LOGIC_VECTOR (2 downto 0); -- RGB LED for system status (LD6)
-        ssd_display : out STD_LOGIC_VECTOR (7 downto 0); -- Seven-segment display
-        oled_data : out STD_LOGIC_VECTOR (23 downto 0) -- OLED display data
+        CLK      : in  STD_LOGIC;
+        RST      : in  STD_LOGIC;
+        SW       : in  STD_LOGIC_VECTOR (3 downto 0);
+        BTN      : in  STD_LOGIC_VECTOR (4 downto 0);
+        LD5      : out STD_LOGIC_VECTOR (2 downto 0);
+        LD6      : out STD_LOGIC_VECTOR (2 downto 0);
+        SSD      : out STD_LOGIC_VECTOR (6 downto 0)
     );
-end saltwater_chlorine_generator;
+end ChlorineGenerator;
 
--- Architecture Body
-architecture Behavioral of saltwater_chlorine_generator is
-    signal pool_size_gallons : integer := 0; -- Pool size in thousands of gallons
-    signal salt_ppm : integer := 0; -- Salt concentration in parts per million (ppm)
-    signal temperature : integer := 0; -- Water temperature
-    signal water_flow_on : STD_LOGIC := '0'; -- Water flow status
-    signal system_status : STD_LOGIC_VECTOR (2 downto 0) := "000"; -- System status (green initially)
+architecture Behavioral of ChlorineGenerator is
+    type state_type is (INIT_POOL_SIZE, SET_TEMPERATURE, SET_SALINITY, IDLE, PUMP_ON, PUMP_OFF, ADD_SALT, SET_VALUE, CHECK_STATUS);
+    signal state, next_state : state_type;
 
-    -- Signals for Pmod interfaces
-    signal oled_init_done : STD_LOGIC := '0'; -- OLED initialization status
-    signal ssd_init_done : STD_LOGIC := '0'; -- SSD initialization status
-    signal enc_init_done : STD_LOGIC := '0'; -- Encoder initialization status
+    signal pool_size, temperature, salinity : integer range 0 to 15 := 0;
+    signal pump_status, system_status : STD_LOGIC := '0';
 
-    -- Signals for OLED commands and data
-    signal oled_command : STD_LOGIC_VECTOR(7 downto 0);
-    signal oled_data_out : STD_LOGIC_VECTOR(23 downto 0);
-
-    -- Signal for SSD display segments
-    signal ssd_segments : STD_LOGIC_VECTOR (7 downto 0);
+    -- SSD display logic and RGB LED control here
+    -- ...
 
 begin
-
-    -- Initialization Process
-    process(clk, rst)
+    process(CLK, RST)
     begin
-        if rst = '1' then
-            pool_size_gallons <= 0;
-            salt_ppm <= 0;
-            temperature <= 0;
-            water_flow_on <= '0';
-            system_status <= "000"; -- Green initially
-            oled_init_done <= '0';
-            ssd_init_done <= '0';
-            enc_init_done <= '0';
-        elsif rising_edge(clk) then
-            -- Initialization code for Pmods, LEDs, and other peripherals
-
-            -- Initialize Pmod OLEDrgb
-            if oled_init_done = '0' then
-                -- Send initialization commands to OLED display
-                oled_command <= x"AE"; -- Set display OFF
-                wait for 10 ns;
-
-                oled_command <= x"81"; -- Set contrast control
-                oled_data_out <= x"7F"; -- Example contrast value
-                wait for 10 ns;
-
-                oled_command <= x"A0"; -- Set segment re-map
-                wait for 10 ns;
-
-                oled_command <= x"A1"; -- Set display start line
-                wait for 10 ns;
-
-                oled_command <= x"A6"; -- Set normal display
-                wait for 10 ns;
-
-                oled_command <= x"AF"; -- Set display ON
-                wait for 10 ns;
-
-                oled_init_done <= '1'; -- Mark OLED initialization as done
-            end if;
-
-            -- Initialize Pmod SSD
-            if ssd_init_done = '0' then
-                -- Clear the SSD display
-                ssd_segments <= "00000000"; -- Clear display segments
-                wait for 10 ns;
-
-                ssd_init_done <= '1'; -- Mark SSD initialization as done
-            end if;
-
-            -- Initialize Pmod ENC
-            if enc_init_done = '0' then
-                -- Placeholder for actual encoder setup code
-                -- Initialize rotary encoder input processing
-                enc_init_done <= '1'; -- Mark encoder initialization as done
-            end if;
-
-            -- Initialize LEDs
-            led_flow_status <= "000"; -- Green initially
-            led_system_status <= "000"; -- Green initially
+        if RST = '1' then
+            state <= INIT_POOL_SIZE;
+        elsif rising_edge(CLK) then
+            state <= next_state;
         end if;
     end process;
 
-    -- User Input Handling Process
-    process(clk, rst)
+    process(state, BTN, SW)
     begin
-        if rst = '1' then
-            -- Reset user input values
-            pool_size_gallons <= 0;
-            salt_ppm <= 0;
-            temperature <= 0;
-        elsif rising_edge(clk) then
-            -- Handle user input for initial settings
-            if sw_user_mode = '1' then
-                -- User input mode
-                if rotary_a = '1' and rotary_b = '0' then
-                    -- Handle rotary encoder input for navigating menus
-                elsif rotary_a = '0' and rotary_b = '1' then
-                    -- Handle rotary encoder input for changing values
+        next_state <= state;
+        case state is
+            when INIT_POOL_SIZE =>
+                -- Display "Po", "ol", " S" etc. on SSD here
+                if BTN(4) = '1' then  -- Set pool size button
+                    pool_size <= conv_integer(SW);
+                    next_state <= SET_TEMPERATURE;
                 end if;
-                
-                if btn_increase_salt = '1' then
-                    -- Change salt PPM
-                    salt_ppm <= salt_ppm + 500; -- Increment by 500 ppm
-                elsif btn_increase_temp = '1' then
-                    -- Change temperature
-                    temperature <= temperature + 1; -- Increment temperature by 1 degree
+
+            when SET_TEMPERATURE =>
+                if BTN(4) = '1' then  -- Set temperature button
+                    temperature <= conv_integer(SW);
+                    next_state <= SET_SALINITY;
                 end if;
-                
-                if btn_add_salt = '1' then
-                    -- Add salt
-                    salt_ppm <= salt_ppm + 20;
-                    -- Trigger remeasurement logic
+
+            when SET_SALINITY =>
+                if BTN(4) = '1' then  -- Set salinity button
+                    salinity <= conv_integer(SW);
+                    next_state <= IDLE;
                 end if;
-            else
-                -- Normal running mode
-            end if;
-        end if;
+
+            when IDLE =>
+                if BTN(2) = '1' then  -- Pump on/off button
+                    if pump_status = '0' then
+                        pump_status <= '1';
+                        next_state <= PUMP_ON;
+                    else
+                        pump_status <= '0';
+                        next_state <= PUMP_OFF;
+                    end if;
+                elsif BTN(3) = '1' then  -- Add salt button
+                    salinity <= salinity + 1;  -- Assuming each press adds 1 (or 100 lbs)
+                    next_state <= ADD_SALT;
+                elsif BTN(4) = '1' then  -- Set value button
+                    next_state <= SET_VALUE;
+                end if;
+
+            when PUMP_ON =>
+                if BTN(2) = '1' then  -- Pump off button
+                    next_state <= PUMP_OFF;
+                end if;
+
+            when PUMP_OFF =>
+                if BTN(2) = '1' then  -- Pump on button
+                    next_state <= PUMP_ON;
+                end if;
+
+            when ADD_SALT =>
+                next_state <= IDLE;
+
+            when SET_VALUE =>
+                if BTN(4) = '1' then  -- Set temperature or salinity
+                    if temperature = 8 then  -- Example condition to switch between temp and salinity
+                        salinity <= conv_integer(SW);
+                    else
+                        temperature <= conv_integer(SW);
+                    end if;
+                    next_state <= IDLE;
+                end if;
+
+            when CHECK_STATUS =>
+                if (temperature > 6) and (salinity >= 5 and salinity <= 12) then
+                    system_status <= '1';
+                else
+                    system_status <= '0';
+                end if;
+                next_state <= IDLE;
+
+            when others =>
+                next_state <= INIT_POOL_SIZE;
+        end case;
     end process;
+
+    -- Display logic for SSD and RGB LEDs based on the current state
+    -- ...
 
 end Behavioral;
