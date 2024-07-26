@@ -1,0 +1,112 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date: 07/25/2024 08:18:47 PM
+-- Design Name: 
+-- Module Name: SWG - Behavioral
+-- Project Name: 
+-- Target Devices: 
+-- Tool Versions: 
+-- Description: 
+-- 
+-- Dependencies: 
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity SWG is
+    Port ( Clk : in STD_LOGIC;
+           reset : in STD_LOGIC;
+           rot_A : in STD_LOGIC;
+           rot_B : in STD_LOGIC;
+           LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
+           LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
+           SSD : out STD_LOGIC_VECTOR (6 downto 0); -- seven seg
+           C   : out STD_LOGIC
+           );
+       
+end SWG;
+
+architecture Behavioral of SWG is
+    -- Enumerated type declaration and state signal declaration
+    type t_State is (INIT_POOL_SIZE, SET_TEMPERATURE, SET_SALINITY,
+                         IDLE, PUMP_ON, PUMP_OFF, ADD_SALT, SET_VALUE, CHECK_STATUS);
+    signal State : t_State;
+
+    -- Debouncing signals
+    constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
+    signal rot_A_debounce_counter, rot_B_debounce_counter : integer := 0;
+    signal rot_A_stable, rot_B_stable : std_logic := '0';
+    signal debounce_flag : std_logic := '0';
+    signal last_encoder_A : std_logic := '0';
+
+    -- Seven-segment signals
+    signal tens_digit, ones_digit : integer range 0 to 9;
+    signal value : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
+    signal count : unsigned(15 downto 0) := (others => '0'); -- alternating between digits
+    signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
+
+begin
+
+    process(Clk) is
+    begin
+        if rising_edge(Clk) then
+            if reset = '0' then
+            -- Reset value
+            State <= IDLE;
+            
+            else
+                
+                case State is
+                    when INIT_POOL_SIZE =>
+                        State <= SET_TEMPERATURE;
+                    
+                    when SET_TEMPERATURE =>
+                        State <= SET_SALINITY;
+                    
+                    when SET_SALINITY =>
+                        State <= IDLE;
+                    
+                    when IDLE =>
+                        State <= PUMP_ON;
+                        
+                    when PUMP_ON =>
+                        State <= PUMP_OFF; 
+                    
+                    when PUMP_OFF =>
+                        State <= ADD_SALT;
+                    
+                    when ADD_SALT =>
+                        State <= SET_VALUE;
+                    
+                    when SET_VALUE =>
+                        State <= CHECK_STATUS;
+                    
+                    when CHECK_STATUS =>
+                        State <= INIT_POOL_SIZE;
+                    
+                end case;
+                    
+        
+        
+            end if;
+        end if;
+    end process;
+end Behavioral;
