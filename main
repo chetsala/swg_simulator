@@ -13,7 +13,8 @@ entity SWG is
            pumpRunning : in STD_LOGIC;
            rotSwitch : in STD_LOGIC;
            addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
-           LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
+           LD0 : out STD_LOGIC; -- standard LED for pump on/off
+           LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
            LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
            SSD : out STD_LOGIC_VECTOR (6 downto 0); -- seven seg
            C   : out STD_LOGIC;
@@ -165,6 +166,8 @@ begin
         if rising_edge(Clk) then
             if reset = '1' then
                 State <= IDLE;
+                LD0 <= '0';
+                LD5 <= "000";
             else
                 case State is
                     when IDLE =>
@@ -194,16 +197,23 @@ begin
                         end if;
 
                     when PUMP_ON =>
-                        LD5 <= "010";
+                        LD0 <= '1'; -- Turn on the pump indicator LED
                         State <= IDLE;
 
                     when PUMP_OFF =>
-                        LD5 <= "100";
+                        LD0 <= '0'; -- Turn off the pump indicator LED
                         State <= IDLE;
 
                     when others =>
                         State <= IDLE;
                 end case;
+
+                -- System status indicator logic
+                if (salt_temp >= 28 and salt_temp <= 45) and (temperature_temp >= 65 and temperature_temp <= 99) then
+                    LD5 <= "010"; -- Green
+                else
+                    LD5 <= "100"; -- Red
+                end if;
             end if;
         end if;
     end process;
