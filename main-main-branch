@@ -58,7 +58,7 @@ architecture Behavioral of SWG is
     signal State : t_State;
 
     -- Status signals
-    pump_on_off : in STD_LOGIC; --pump on 45 sec, sample nacl
+    -- pump_on_off : in STD_LOGIC; --pump on 45 sec, sample nacl
 
 
     -- Debouncing signals
@@ -74,20 +74,22 @@ architecture Behavioral of SWG is
     signal count : unsigned(15 downto 0) := (others => '0'); -- alternating between digits
     signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
 
-begin
     -- Variables
-    --clk rate for zybo z7 33.3333 MHz
-    VAR : process (Clk)
-        variable salt         : integer range 0 to 99 := 35; --
-        variable temperature  : integer range 0 to 99 := 78; --
-        variable pool_size    : integer := 150;              -- hard coded to 150 gal
-        variable turnover     : integer := 1665000000;       -- equiv to 50 seconds
-        variable duty_cycle   : integer := 299700000;        -- equiv to 9 sec 
-        // variable : integer range 0 to 99 := 0;
+    -- clk rate for zybo z7 33.3333 MHz
+    -- VAR : process (Clk)
+        signal salt         : integer range 0 to 99 := 35; --
+        signal temperature  : integer range 0 to 99 := 78; --
+        signal pool_size    : integer := 150;              -- hard coded to 150 gal
+        signal turnover     : integer := 1665000000;       -- equiv to 50 seconds
+        signal duty_cycle   : integer := 299700000;        -- equiv to 9 sec 
+        -- variable : integer range 0 to 99 := 0;
     
 
+
+begin
+    
     -- Debouncing process for "rot_A"
-    process(clk, reset)
+    process(Clk, reset)
     begin
         if reset = '1' then
             rot_A_debounce_counter <= 0;
@@ -204,4 +206,5 @@ begin
             end if;
         end if;
     end process;
+    end process VAR; 
 end Behavioral;
