@@ -21,6 +21,8 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
+use IEEE.math_real.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -36,10 +38,16 @@ entity SWG is
            reset : in STD_LOGIC;
            rot_A : in STD_LOGIC;
            rot_B : in STD_LOGIC;
-           LD5 : out STD_LOGIC_VECTOR (2 downto 0);
-           LD6 : out STD_LOGIC_VECTOR (2 downto 0);
-           SSD : out STD_LOGIC_VECTOR (6 downto 0);
-           C   : out STD_LOGIC
+           setSaltValue : in STD_LOGIC;
+           setTempValue : in STD_LOGIC;
+           pumpRunning : in STD_LOGIC;
+           rotSwitch :  in STD_LOGIC;
+           addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
+           LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
+           LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
+           SSD : out STD_LOGIC_VECTOR (6 downto 0); -- seven seg
+           C   : out STD_LOGIC;
+           setPump : in STD_LOGIC
            );
        
 end SWG;
@@ -49,51 +57,156 @@ architecture Behavioral of SWG is
     type t_State is (INIT_POOL_SIZE, SET_TEMPERATURE, SET_SALINITY,
                          IDLE, PUMP_ON, PUMP_OFF, ADD_SALT, SET_VALUE, CHECK_STATUS);
     signal State : t_State;
+
+    -- Status signals
+    -- pump_on_off : in STD_LOGIC; --pump on 45 sec, sample nacl
+
+
+    -- Debouncing signals
+    constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
+    signal rot_A_debounce_counter, rot_B_debounce_counter : integer := 0;
+    signal rot_A_stable, rot_B_stable : std_logic := '0';
+    signal debounce_flag : std_logic := '0';
+    signal last_encoder_A : std_logic := '0';
+
+    -- Seven-segment signals
+    signal tens_digit, ones_digit : integer range 0 to 9;
+    signal value : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
+    signal count : unsigned(15 downto 0) := (others => '0'); -- alternating between digits
+    signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
+
+    -- Variables
+    -- clk rate for zybo z7 33.3333 MHz
+    -- VAR : process (Clk)
+        signal salt         : integer range 0 to 99 := 35; --
+        signal temperature  : integer range 0 to 99 := 78; --
+        signal pool_size    : integer := 150;              -- hard coded to 150 gal
+        signal turnover     : integer := 1665000000;       -- equiv to 50 seconds
+        signal duty_cycle   : integer := 299700000;        -- equiv to 9 sec 
+        -- variable : integer range 0 to 99 := 0;
     
 
-begin
 
+begin
+    
+    -- Debouncing process for "rot_A"
+    process(Clk, reset)
+    begin
+        if reset = '1' then
+            rot_A_debounce_counter <= 0;
+            rot_A_stable <= '0';
+        elsif rising_edge(clk) then
+            if rot_A = '1' then
+                if rot_A_debounce_counter < DEBOUNCE_MAX then
+                    rot_A_debounce_counter <= rot_A_debounce_counter + 1;
+                else
+                    rot_A_stable <= '1';
+                end if;
+            else
+                rot_A_debounce_counter <= 0;
+                rot_A_stable <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Debouncing process for "rot_B"
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            rot_B_debounce_counter <= 0;
+            rot_B_stable <= '0';
+        elsif rising_edge(clk) then
+            if rot_B = '1' then
+                if rot_B_debounce_counter < DEBOUNCE_MAX then
+                    rot_B_debounce_counter <= rot_B_debounce_counter + 1;
+                else
+                    rot_B_stable <= '1';
+                end if;
+            else
+                rot_B_debounce_counter <= 0;
+                rot_B_stable <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Process to handle add/subtract logic and update 7-segment display
+    process(clk, reset, value)
+    begin
+        if reset = '1' then
+            count <= (others => '0');
+            c_temp <= '0';
+            tens_digit <= 0;
+            ones_digit <= 0;
+            value <= 0;
+            last_encoder_A <= '0';
+            debounce_flag <= '0';
+        elsif rising_edge(clk) then
+            -- Add/Subtract logic
+            if rot_A_stable = '1' and debounce_flag = '0' and value < 99 then
+                value <= value + 1;
+                debounce_flag <= '1';
+            elsif rot_B_stable = '1' and debounce_flag = '0' and value > 0 then
+                value <= value - 1;
+                debounce_flag <= '1';
+            elsif rot_A_stable = '0' and rot_B_stable = '0' then
+                debounce_flag <= '0';
+            end if;
+
+            -- Convert to BCD
+            tens_digit <= value / 10;
+            ones_digit <= value mod 10;
+
+            -- Alternate digit selection
+            count <= count + 1;
+            c_temp <= count(count'high);
+        end if;
+    end process;
+
+    -- main process
     process(Clk) is
     begin
         if rising_edge(Clk) then
-            if reset = '0' then
+            if reset = '1' then
             -- Reset value
+            rot_A_debounce_counter <= 0;
+            rot_A_stable <= '0';
+            value <= 0;
             State <= IDLE;
             
             else
                 
                 case State is
-                    when INIT_POOL_SIZE =>
-                        State <= SET_TEMPERATURE;
+                    when IDLE =>
+                        if setPump = '1' then State <= PUMP_ON;
+                        elsif setTempValue = '1' then State <= SET_TEMPERATURE;
+                        elsif setSaltValue = '1' then State <= SET_SALINITY;
+                        elsif setPump = '0' then State <= PUMP_OFF;
+                        else State <= IDLE;
+                        end if;
                     
                     when SET_TEMPERATURE =>
-                        State <= SET_SALINITY;
+                        LD6 <= "010";
+                        value <= temperature;
+                        if setTempValue = '0' then State <= IDLE;
+                        end if;
                     
                     when SET_SALINITY =>
-                        State <= IDLE;
-                    
-                    when IDLE =>
-                        State <= PUMP_ON;
+                        LD6 <= "100";
+                        value <= salt;
+                        if setSaltValue = '0' then State <= IDLE;
+                        end if;
                         
                     when PUMP_ON =>
-                        State <= PUMP_OFF; 
+                        LD5 <= "010";
+                        State <= IDLE; 
                     
                     when PUMP_OFF =>
-                        State <= ADD_SALT;
+                        LD5 <= "100";
+                        State <= IDLE;
+                    when others =>
+                        State <= IDLE;
                     
-                    when ADD_SALT =>
-                        State <= SET_VALUE;
-                    
-                    when SET_VALUE =>
-                        State <= CHECK_STATUS;
-                    
-                    when CHECK_STATUS =>
-                        State <= INIT_POOL_SIZE;
-                    
-                end case;
-                    
-        
-        
+                end case;        
             end if;
         end if;
     end process;
