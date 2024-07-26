@@ -38,8 +38,10 @@ entity SWG is
            reset : in STD_LOGIC;
            rot_A : in STD_LOGIC;
            rot_B : in STD_LOGIC;
+           setSaltValue : in STD_LOGIC;
+           setTempValue : in STD_LOGIC;
            pumpRunning : in STD_LOGIC;
-           SW : in STD_LOGIC_VECTOR (3 downto 0); -- used to toggle settings
+           rotSwitch :  in STD_LOGIC;
            addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
            LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
            LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
@@ -172,23 +174,23 @@ begin
                 
                 case State is
                     when IDLE =>
-                        if SW[3] = '1' the State <= PUMP_ON;
-                        elsif SW[0] = '1' then State <= SET_TEMPERATURE;
-                        elsif SW[1] = '1' then State <= SET_SALT;
+                        if pumpRunning = '1' the State <= PUMP_ON;
+                        elsif setTempValue = '1' then State <= SET_TEMPERATURE;
+                        elsif setSaltValue = '1' then State <= SET_SALT;
                         else State <= IDLE;
                         end if;
                     
                     when SET_TEMPERATURE =>
                         LD6 <= "010";
                         value <= temperature;
-                        if sw[0] = 0 then State <= IDLE;
+                        if setTempValue = 0 then State <= IDLE;
                     
                     when SET_SALT =>
                         LD6 <= "100"
                         value <= salt;
                         rotary to select
                         value -> salt variable
-                        if sw[1] = 0 then State <= IDLE;
+                        if setSaltValue = 0 then State <= IDLE;
                         
                     when PUMP_ON =>
                         pumpRunning <= '1';
