@@ -71,7 +71,7 @@ begin
         end if;
     end process;
 
-    -- Main process to handle add/subtract logic and update 7-segment display
+    -- Process to handle add/subtract logic and update 7-segment display
     process(clk, reset)
     begin
         if reset = '1' then
@@ -98,6 +98,12 @@ begin
             tens_digit <= value / 10;
             ones_digit <= value mod 10;
 
+            --Save value to salt or temp
+            if SW[0] = '1' then -- temp
+                temperature <= value;
+            elsif SW[1] = '1' then -- salt
+                salt <= value;
+            end if;
             -- Alternate digit selection
             count <= count + 1;
             c_temp <= count(count'high);

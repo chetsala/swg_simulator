@@ -38,6 +38,8 @@ entity SWG is
            reset : in STD_LOGIC;
            rot_A : in STD_LOGIC;
            rot_B : in STD_LOGIC;
+           pumpRunning : in STD_LOGIC;
+           SW : in STD_LOGIC_VECTOR (3 downto 0); -- used to toggle settings
            addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
            LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
            LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
@@ -74,15 +76,13 @@ begin
     -- Variables
     --clk rate for zybo z7 33.3333 MHz
     VAR : process (Clk)
-        variable salt         : integer range 0 to 99 := 0;
-        variable temperature  : integer range 0 to 99 := 0;
-        variable pool_size    : integer := 150;               -- hard coded to 150 gal
-        variable turnover     : integer := 50;                -- in seconds
-        variable duty_cycle   : integer := 9;                 -- in seconds
-        variable              : 
-        duty_cycle/(33.3333*10000000)
-        0.000000270270270270
+        variable salt         : integer range 0 to 99 := 35; --
+        variable temperature  : integer range 0 to 99 := 78; --
+        variable pool_size    : integer := 150;              -- hard coded to 150 gal
+        variable turnover     : integer := 1665000000;       -- equiv to 50 seconds
+        variable duty_cycle   : integer := 299700000;        -- equiv to 9 sec 
         // variable : integer range 0 to 99 := 0;
+    
 
     -- Debouncing process for "rot_A"
     process(clk, reset)
@@ -172,37 +172,33 @@ begin
                 
                 case State is
                     when IDLE =>
-                        State <= PUMP_ON;
-
-                    when INIT_POOL_SIZE =>
-
-                        State <= SET_TEMPERATURE;
+                        if SW[3] = '1' the State <= PUMP_ON;
+                        elsif SW[0] = '1' then State <= SET_TEMPERATURE;
+                        elsif SW[1] = '1' then State <= SET_SALT;
+                        else State <= IDLE;
+                        end if;
                     
                     when SET_TEMPERATURE =>
-                        State <= SET_SALINITY;
+                        LD6 <= "010";
+                        value <= temperature;
+                        if sw[0] = 0 then State <= IDLE;
                     
-                    when SET_SALINITY =>
-                        State <= IDLE;
+                    when SET_SALT =>
+                        LD6 <= "100"
+                        value <= salt;
+                        rotary to select
+                        value -> salt variable
+                        if sw[1] = 0 then State <= IDLE;
                         
                     when PUMP_ON =>
-                        State <= PUMP_OFF; 
+                        pumpRunning <= '1';
+                        State <= IDLE; 
                     
                     when PUMP_OFF =>
-                        State <= ADD_SALT;
+                        pumpRunning <= '0';
+                        State <= IDLE;
                     
-                    when ADD_SALT =>
-                        State <= SET_VALUE;
-                    
-                    when SET_VALUE =>
-                        State <= CHECK_STATUS;
-                    
-                    when CHECK_STATUS =>
-                        State <= INIT_POOL_SIZE;
-                    
-                end case;
-                    
-        
-        
+                end case;        
             end if;
         end if;
     end process;
