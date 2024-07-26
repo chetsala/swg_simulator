@@ -11,39 +11,35 @@ entity SWG is
            setSaltValue : in STD_LOGIC;
            setTempValue : in STD_LOGIC;
            pumpRunning : in STD_LOGIC;
-           rotSwitch :  in STD_LOGIC;
+           rotSwitch : in STD_LOGIC;
            addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
            LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
            LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
            SSD : out STD_LOGIC_VECTOR (6 downto 0); -- seven seg
            C   : out STD_LOGIC;
-           setPump : in STD_LOGIC
+           setPump : in STD_LOGIC;
+           setValue : in STD_LOGIC -- New input for the switch
            );
 end SWG;
 
 architecture Behavioral of SWG is
-    -- Enumerated type declaration and state signal declaration
     type t_State is (INIT_POOL_SIZE, SET_TEMPERATURE, SET_SALINITY,
                      IDLE, PUMP_ON, PUMP_OFF, ADD_SALT, SET_VALUE, CHECK_STATUS);
     signal State : t_State;
 
-    -- Debouncing signals
     constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
     signal rot_A_debounce_counter, rot_B_debounce_counter : integer := 0;
     signal rot_A_stable, rot_B_stable : std_logic := '0';
     signal debounce_flag : std_logic := '0';
 
-    -- Rotary encoder signals
     signal last_A, last_B : std_logic := '0';
 
-    -- Seven-segment signals
     signal tens_digit, ones_digit : integer range 0 to 9;
     signal value : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
     signal count : unsigned(15 downto 0) := (others => '0'); -- alternating between digits
     signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
     signal value_temp : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
 
-    -- Variables
     signal salt : integer range 0 to 99 := 35;
     signal temperature : integer range 0 to 99 := 78;
     signal pool_size : integer := 150;
@@ -52,8 +48,10 @@ architecture Behavioral of SWG is
     signal salt_temp : integer range 0 to 99 := 35;
     signal temperature_temp : integer range 0 to 99 := 78;
 
+    signal temp_storage, salt_storage : integer range 0 to 99 := 0; -- New variables for storing values
+
 begin
-    
+
     -- Debouncing process for "rot_A"
     process(Clk, reset)
     begin
@@ -96,6 +94,7 @@ begin
 
     -- Process to handle add/subtract logic and update 7-segment display
     process(Clk, reset)
+        variable temp_value : integer range 0 to 99 := 0;
     begin
         if reset = '1' then
             count <= (others => '0');
@@ -106,6 +105,7 @@ begin
             debounce_flag <= '0';
             last_A <= '0';
             last_B <= '0';
+            temp_value := 0;
         elsif rising_edge(Clk) then
             -- Determine rotation direction
             if rot_A /= last_A then
@@ -122,16 +122,36 @@ begin
             last_A <= rot_A;
             last_B <= rot_B;
 
-            -- Convert to BCD
-            tens_digit <= value / 10;
-            ones_digit <= value mod 10;
-
             -- Save values
             if setTempValue = '1' then
                 temperature_temp <= value;
             elsif setSaltValue = '1' then
                 salt_temp <= value;
             end if;
+
+            -- Store values when setValue is switched
+            if setValue = '1' then
+                if setTempValue = '1' then
+                    temp_storage <= value;
+                elsif setSaltValue = '1' then
+                    salt_storage <= value;
+                end if;
+            end if;
+
+            -- Determine what to display
+            if setTempValue = '1' then
+                temp_value := temp_storage;
+            elsif setSaltValue = '1' then
+                temp_value := salt_storage;
+            else
+                temp_value := value;
+            end if;
+
+            value_temp <= temp_value;
+
+            -- Convert to BCD
+            tens_digit <= temp_value / 10;
+            ones_digit <= temp_value mod 10;
 
             -- Alternate digit selection
             count <= count + 1;
@@ -144,7 +164,6 @@ begin
     begin
         if rising_edge(Clk) then
             if reset = '1' then
-                -- Reset value
                 State <= IDLE;
             else
                 case State is
@@ -164,14 +183,12 @@ begin
 
                     when SET_TEMPERATURE =>
                         LD6 <= "100";
-                        value_temp <= temperature;
                         if setTempValue = '0' then 
                             State <= IDLE;
                         end if;
 
                     when SET_SALINITY =>
                         LD6 <= "001";
-                        value_temp <= salt;
                         if setSaltValue = '0' then 
                             State <= IDLE;
                         end if;
