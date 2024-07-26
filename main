@@ -33,7 +33,15 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity SWG is
     Port ( Clk : in STD_LOGIC;
-           reset : in STD_LOGIC);
+           reset : in STD_LOGIC;
+           rot_A : in STD_LOGIC;
+           rot_B : in STD_LOGIC;
+           LD5 : out STD_LOGIC_VECTOR (2 downto 0);
+           LD6 : out STD_LOGIC_VECTOR (2 downto 0);
+           SSD : out STD_LOGIC_VECTOR (6 downto 0);
+           C   : out STD_LOGIC
+           );
+       
 end SWG;
 
 architecture Behavioral of SWG is
