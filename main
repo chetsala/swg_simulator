@@ -74,6 +74,7 @@ architecture Behavioral of SWG is
     signal value : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
     signal count : unsigned(15 downto 0) := (others => '0'); -- alternating between digits
     signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
+    signal value_temp : integer range 0 to 99 := 0;  -- Value to be displayed (0-99)
 
     -- Variables
     -- clk rate for zybo z7 33.3333 MHz
@@ -95,7 +96,7 @@ begin
         if reset = '1' then
             rot_A_debounce_counter <= 0;
             rot_A_stable <= '0';
-        elsif rising_edge(clk) then
+        elsif rising_edge(Clk) then
             if rot_A = '1' then
                 if rot_A_debounce_counter < DEBOUNCE_MAX then
                     rot_A_debounce_counter <= rot_A_debounce_counter + 1;
@@ -110,12 +111,12 @@ begin
     end process;
 
     -- Debouncing process for "rot_B"
-    process(clk, reset)
+    process(Clk, reset)
     begin
         if reset = '1' then
             rot_B_debounce_counter <= 0;
             rot_B_stable <= '0';
-        elsif rising_edge(clk) then
+        elsif rising_edge(Clk) then
             if rot_B = '1' then
                 if rot_B_debounce_counter < DEBOUNCE_MAX then
                     rot_B_debounce_counter <= rot_B_debounce_counter + 1;
@@ -130,8 +131,9 @@ begin
     end process;
 
     -- Process to handle add/subtract logic and update 7-segment display
-    process(clk, reset, value)
+    process(Clk, reset, value_temp)
     begin
+        value <= value_temp;
         if reset = '1' then
             count <= (others => '0');
             c_temp <= '0';
@@ -140,7 +142,7 @@ begin
             value <= 0;
             last_encoder_A <= '0';
             debounce_flag <= '0';
-        elsif rising_edge(clk) then
+        elsif rising_edge(Clk) then
             -- Add/Subtract logic
             if rot_A_stable = '1' and debounce_flag = '0' and value < 99 then
                 value <= value + 1;
@@ -170,13 +172,13 @@ begin
             -- Reset value
             rot_A_debounce_counter <= 0;
             rot_A_stable <= '0';
-            value <= 0;
             State <= IDLE;
             
             else
                 
                 case State is
                     when IDLE =>
+                        LD6 <= "010";
                         if setPump = '1' then State <= PUMP_ON;
                         elsif setTempValue = '1' then State <= SET_TEMPERATURE;
                         elsif setSaltValue = '1' then State <= SET_SALINITY;
@@ -185,14 +187,14 @@ begin
                         end if;
                     
                     when SET_TEMPERATURE =>
-                        LD6 <= "010";
-                        value <= temperature;
+                        LD6 <= "100";
+                        value_temp <= temperature;
                         if setTempValue = '0' then State <= IDLE;
                         end if;
                     
                     when SET_SALINITY =>
-                        LD6 <= "100";
-                        value <= salt;
+                        LD6 <= "001";
+                        value_temp <= salt;
                         if setSaltValue = '0' then State <= IDLE;
                         end if;
                         
@@ -210,4 +212,40 @@ begin
             end if;
         end if;
     end process;
+    -- 7-segment display logic
+    process(c_temp, tens_digit, ones_digit)
+    begin
+        -- Select digit based on c_temp
+        case c_temp is
+            when '0' =>
+                case ones_digit is
+                    when 0 => SSD <= "0111111";
+                    when 1 => SSD <= "0000110";
+                    when 2 => SSD <= "1011011";
+                    when 3 => SSD <= "1001111";
+                    when 4 => SSD <= "1100110";
+                    when 5 => SSD <= "1101101";
+                    when 6 => SSD <= "1111101";
+                    when 7 => SSD <= "0000111";
+                    when 8 => SSD <= "1111111";
+                    when 9 => SSD <= "1101111";
+                    when others => SSD <= "0000000";  -- Default case
+                end case;
+            when others =>
+                case tens_digit is
+                    when 0 => SSD <= "0111111";
+                    when 1 => SSD <= "0000110";
+                    when 2 => SSD <= "1011011";
+                    when 3 => SSD <= "1001111";
+                    when 4 => SSD <= "1100110";
+                    when 5 => SSD <= "1101101";
+                    when 6 => SSD <= "1111101";
+                    when 7 => SSD <= "0000111";
+                    when 8 => SSD <= "1111111";
+                    when 9 => SSD <= "1101111";
+                    when others => SSD <= "0000000";  -- Default case
+                end case;
+        end case;
+    end process;
+    C <= c_temp;
 end Behavioral;
