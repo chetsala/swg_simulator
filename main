@@ -158,6 +158,12 @@ begin
             tens_digit <= value / 10;
             ones_digit <= value mod 10;
 
+            -- save values
+            if setTempValue = '1' then
+                temperature <= value;
+            elsif setSaltValue = '1' then
+                salt <= value;
+            end if;
             -- Alternate digit selection
             count <= count + 1;
             c_temp <= count(count'high);
@@ -165,7 +171,7 @@ begin
     end process;
 
     -- main process
-    process(Clk) is
+    process(Clk,temperature,salt) is
     begin
         if rising_edge(Clk) then
             if reset = '1' then
@@ -179,9 +185,10 @@ begin
                 case State is
                     when IDLE =>
                         LD6 <= "010";
-                        if setPump = '1' then State <= PUMP_ON;
-                        elsif setTempValue = '1' then State <= SET_TEMPERATURE;
+                       
+                        if setTempValue = '1' then State <= SET_TEMPERATURE;
                         elsif setSaltValue = '1' then State <= SET_SALINITY;
+                        elsif setPump = '1' then State <= PUMP_ON;
                         elsif setPump = '0' then State <= PUMP_OFF;
                         else State <= IDLE;
                         end if;
