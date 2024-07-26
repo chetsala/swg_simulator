@@ -21,6 +21,8 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
+use IEEE.math_real.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -36,6 +38,7 @@ entity SWG is
            reset : in STD_LOGIC;
            rot_A : in STD_LOGIC;
            rot_B : in STD_LOGIC;
+           addSalt : in STD_LOGIC; -- button to add salt to system if salt lvl is low
            LD5 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: pump output
            LD6 : out STD_LOGIC_VECTOR (2 downto 0); -- rgbLED: system status
            SSD : out STD_LOGIC_VECTOR (6 downto 0); -- seven seg
@@ -49,6 +52,10 @@ architecture Behavioral of SWG is
     type t_State is (INIT_POOL_SIZE, SET_TEMPERATURE, SET_SALINITY,
                          IDLE, PUMP_ON, PUMP_OFF, ADD_SALT, SET_VALUE, CHECK_STATUS);
     signal State : t_State;
+
+    -- Status signals
+    pump_on_off : in STD_LOGIC; --pump on 45 sec, sample nacl
+
 
     -- Debouncing signals
     constant DEBOUNCE_MAX : integer := 100000;  -- Adjust debounce time as needed
@@ -64,18 +71,111 @@ architecture Behavioral of SWG is
     signal c_temp : std_logic; -- temp var since "out" ports cannot be read in
 
 begin
+    -- Variables
+    --clk rate for zybo z7 33.3333 MHz
+    VAR : process (Clk)
+        variable salt         : integer range 0 to 99 := 0;
+        variable temperature  : integer range 0 to 99 := 0;
+        variable pool_size    : integer := 150;               -- hard coded to 150 gal
+        variable turnover     : integer := 50;                -- in seconds
+        variable duty_cycle   : integer := 9;                 -- in seconds
+        variable              : 
+        duty_cycle/(33.3333*10000000)
+        0.000000270270270270
+        // variable : integer range 0 to 99 := 0;
 
+    -- Debouncing process for "rot_A"
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            rot_A_debounce_counter <= 0;
+            rot_A_stable <= '0';
+        elsif rising_edge(clk) then
+            if rot_A = '1' then
+                if rot_A_debounce_counter < DEBOUNCE_MAX then
+                    rot_A_debounce_counter <= rot_A_debounce_counter + 1;
+                else
+                    rot_A_stable <= '1';
+                end if;
+            else
+                rot_A_debounce_counter <= 0;
+                rot_A_stable <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Debouncing process for "rot_B"
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            rot_B_debounce_counter <= 0;
+            rot_B_stable <= '0';
+        elsif rising_edge(clk) then
+            if rot_B = '1' then
+                if rot_B_debounce_counter < DEBOUNCE_MAX then
+                    rot_B_debounce_counter <= rot_B_debounce_counter + 1;
+                else
+                    rot_B_stable <= '1';
+                end if;
+            else
+                rot_B_debounce_counter <= 0;
+                rot_B_stable <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Process to handle add/subtract logic and update 7-segment display
+    process(clk, reset, value)
+    begin
+        if reset = '1' then
+            count <= (others => '0');
+            c_temp <= '0';
+            tens_digit <= 0;
+            ones_digit <= 0;
+            value <= 0;
+            last_encoder_A <= '0';
+            debounce_flag <= '0';
+        elsif rising_edge(clk) then
+            -- Add/Subtract logic
+            if rot_A_stable = '1' and debounce_flag = '0' and value < 99 then
+                value <= value + 1;
+                debounce_flag <= '1';
+            elsif rot_B_stable = '1' and debounce_flag = '0' and value > 0 then
+                value <= value - 1;
+                debounce_flag <= '1';
+            elsif rot_A_stable = '0' and rot_B_stable = '0' then
+                debounce_flag <= '0';
+            end if;
+
+            -- Convert to BCD
+            tens_digit <= value / 10;
+            ones_digit <= value mod 10;
+
+            -- Alternate digit selection
+            count <= count + 1;
+            c_temp <= count(count'high);
+        end if;
+    end process;
+
+    -- main process
     process(Clk) is
     begin
         if rising_edge(Clk) then
-            if reset = '0' then
+            if reset = '1' then
             -- Reset value
+            rot_A_debounce_counter <= 0;
+            rot_A_stable <= '0';
+            value <= 0;
             State <= IDLE;
             
             else
                 
                 case State is
+                    when IDLE =>
+                        State <= PUMP_ON;
+
                     when INIT_POOL_SIZE =>
+
                         State <= SET_TEMPERATURE;
                     
                     when SET_TEMPERATURE =>
@@ -83,9 +183,6 @@ begin
                     
                     when SET_SALINITY =>
                         State <= IDLE;
-                    
-                    when IDLE =>
-                        State <= PUMP_ON;
                         
                     when PUMP_ON =>
                         State <= PUMP_OFF; 
