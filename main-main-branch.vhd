@@ -83,8 +83,6 @@ architecture Behavioral of SWG is
         signal turnover     : integer := 1665000000;       -- equiv to 50 seconds
         signal duty_cycle   : integer := 299700000;        -- equiv to 9 sec 
         -- variable : integer range 0 to 99 := 0;
-    
-
 
 begin
     
@@ -176,7 +174,7 @@ begin
                 
                 case State is
                     when IDLE =>
-                        if pumpRunning = '1' the State <= PUMP_ON;
+                        if pumpRunning = '1' then State <= PUMP_ON;
                         elsif setTempValue = '1' then State <= SET_TEMPERATURE;
                         elsif setSaltValue = '1' then State <= SET_SALT;
                         else State <= IDLE;
@@ -185,26 +183,29 @@ begin
                     when SET_TEMPERATURE =>
                         LD6 <= "010";
                         value <= temperature;
-                        if setTempValue = 0 then State <= IDLE;
+                        if setTempValue = '0' then State <= IDLE;
+                        end if;
+                        
                     
-                    when SET_SALT =>
+                    when SET_SALINITY =>
                         LD6 <= "100"
                         value <= salt;
-                        rotary to select
-                        value -> salt variable
-                        if setSaltValue = 0 then State <= IDLE;
+                        if setSaltValue = '0' then State <= IDLE;
+                        end if;
                         
                     when PUMP_ON =>
-                        pumpRunning <= '1';
+                        LD5 <= "010";
                         State <= IDLE; 
                     
                     when PUMP_OFF =>
-                        pumpRunning <= '0';
+                        LD5 <= "100";
+                        State <= IDLE;
+
+                    when others =>
                         State <= IDLE;
                     
                 end case;        
             end if;
         end if;
     end process;
-    end process VAR; 
 end Behavioral;
